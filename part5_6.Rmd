@@ -1,0 +1,49 @@
+# Part 5: Summary of the results
+
+The resulting models obtained from the previous section is summarized below:
+
+1. **Linear regression**: Input variables to the linear regression model were chosen using the forward stepwise linear regression procedure combined with a 10-fold cross validation. The resulting model took the following variables as input: *alcohol, volatile acidity, sulphates, chlorides, pH, total sulfur dioxide, free sulfur dioxide*. The RMSE and classification accuracy of the prediction evaluated on the test set were:
+
+  + RMSE: `r round(linear.model.rmse, 2)`
+
+  + Classification accuracy: `r round(lm.conf.matrix$overall["Accuracy"], 4) * 100`
+  
+  + MAD: `r round(linear.model.mad, 2)`
+
+2. **KNN with principal components as input variables**: $p^*$, the number of principal components used as input variables, as well as $k^*$, the number of nearest neighbors used in the KNN model were chosen using the 10-fold cross validation procedure. The optimum *(p, k)* pair was determined to be (`r p_opt`, `r k_opt`).  The RMSE and classification accuracy of the prediction evaluated on the test set were:
+
+  + RMSE: `r round(knn.rmse,2)`
+
+  + Classification accuracy: `r round(knn.conf.matrix$overall["Accuracy"], 4) * 100`
+  
+  + MAD: `r round(knn.mad, 2)`
+
+***
+# Part 6: Comparison with the prediction models by Cortez, et al.
+
+Cortez, et al. (http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.p
+df) applied 3 regression techniques to predict the red wine dataset used in this exercise: linear/multiple regression (MR), support vector machine (SVM), and neural network (nnet). The metrics used for performance measures were $MAD$ (mean of absolute difference), classification accuracy with different tolerances (T=0.25, 0.5, and 1.0), and Kappa (T=0.5). We have calculated the RMSE, MAD, and classification accuracy to the nearest class as our performance metrics; the latter is comparable to Cortez et al's $Accuracy_{T=0.5}$.
+ 
+The following tables show our and Cortez et al's results. *I* is the number of input variables to the model. The MADs of our models were higher than those of Cortez et al.'s models. The classification accuracy of Cortez et al's MR seemed comparable to ours. Additionally, the classification accuracy of our KNN model (66.6 %) outperformed all models. Note that we only measured our models'performance on 1 test set (320 observations) and thus, no estimates of their variabilites were available.  
+
+**Classification accuracy (T=0.5)**:
+
+Model                 | MR                 | KNN        | Neural Net   | SVM         |  
+----------------------|--------------------|------------|--------------|-------------|
+Cortez, et al         |59.1+/-0.1 (I=9.2)  | -          | 59.1+/-0.3   | 62.4+/-0.4  |
+----------------------|--------------------|------------|--------------|-------------|
+Ours                  |60.6 (I=8)          | 66.6       |     -        |    -        |
+----------------------|--------------------|------------|--------------|-------------|
+
+**MAD**:
+
+Model                 | MR                 | KNN        | Neural Net   | SVM         |  
+----------------------|--------------------|------------|--------------|-------------|
+Cortez, et al         |0.50+/-0.00 (I=9.2) | -          | 0.59+/-0.00  | 0.45+/-0.00 |
+----------------------|--------------------|------------|--------------|-------------|
+Ours                  |1.06  (I=8)         | 1.96       |     -        |    -        |
+----------------------|--------------------|------------|--------------|-------------|
+
+The SVM technique applied by Cortez et al provided insights into the order of importance of wine attributes. Their analysis yielded the following atrributes, listed from the most to the least order of importance: 1) sulphates, 2) pH, 3) total sulfur dioxide, 4) alcohol, 5) volatile acidity, 6) free sulfur dioxide, 7) fixed acidity, 8) residual sugar, 9) chlorides, 10) density, 11) citric acid
+
+The stepwise linear regression we employed also provided insights into the top 7 important attributes defining wine quality, as well as their directions of influence on the quality scores (positive or negative). They were: 1) alcohol (+), 2) volatile acidity (-), 3) sulphates (+), 4) chlorides (-), 5) pH (-), 6) total sulfur dioxide (-), 7) free sulfur dioxide (+). The importance of these attributes, as well as their directions of influence, were consistent with the oenological theory as discussed in Cortez et al.'s paper. 

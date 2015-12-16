@@ -1,0 +1,180 @@
+# Part 4: Prediction models
+
+The following techniques were employed: stepwise linear regression (4.1), KNN classification (4.2). To compare the performance of the different prediction models, we divide the dataset into train and test sets with 80% and 20% split, respectively. Furthermore, for each prediction model, the model parameters and input variables were selected using a 10-fold cross validation procedure. That is, 80% of the total data was used to build the model, and the 10-fold cross validation procedure was performed in this portion of the data. The remaining 20% of the data was used to compare the performance of the final linear regression *vs.* KNN models.
+
+More specifically, the tasks for each model are:
+
+1. Linear regression: Select a subset of 11 wine attributes using the stepwise linear regression procedure (forward direction).
+
+2. KNN classification: Apply PCA and use *p* principal components as input to the KNN model. Determine the number of nearest neighbors, *k*, and the number of principal components, *p* to be used in the model.
+
+The following block of codes splits the dataset into train and test sets:
+```{r}
+set.seed(1)
+rtrain <- sample(nrow(wine.df), floor(0.8 * nrow(wine.df)))
+train.set <-  wine.df[rtrain, ]
+test.set <- wine.df[-rtrain, ]
+```
+
+## 4.1. Stepwise Linear Regression
+### Selection of input variables (forward selection)
+Here, we used the forward selection procedure combined with a 10-fold cross validation for selecting the subset of input variables to be used in the final linear regression model. 
+
+For each fold, the resulting model coefficients are stored in a list named *cv.fs.models* and the RMSE on the test set of that fold is stored in a list named *cv.test.rmse*. 
+
+```{r}
+set.seed(642)
+nfolds <- 10
+folds <- createFolds(train.set$quality, k=nfolds)
+
+cv.fs.models <- vector("list", nfolds)          # store the model resulting from each training fold 
+cv.test.rmse <- rep(0, nfolds)
+
+for (k in 1:nfolds) {
+  rtest <- folds[[k]]
+  train <- train.set[-rtest, ]
+  test <- train.set[rtest, ]
+
+  full <- lm(quality ~ ., data=train)
+  null <- lm(quality ~ 1, data=train)
+  stepF <- stepAIC(null, scope=list(lower=null, upper=full),
+                   direction="forward", trace=FALSE)
+  cv.fs.models[[k]] <- stepF$coefficients
+  
+  # Get the RSS 
+  predictions <- predict(stepF, interval="prediction", newdata=test)
+  rmse <- sqrt(sum((test$quality - predictions[ ,"fit"])^2) / nrow(test))
+  cv.test.rmse[k] <- rmse
+}
+```
+
+The following code prints the model and RMSE obtained in each fold: 
+```{r}
+for (k in 1:nfolds) {
+  cat(paste("Fold #", k, ": \n"))
+  cat(names(cv.fs.models[[k]]), sep=", ")
+  cat("\n")
+  cat(cv.fs.models[[k]], sep=", ")
+  cat("\n")
+  cat(paste("RMSE: ", cv.test.rmse[k], "\n"))
+  cat("\n")
+}
+```
+
+### Summary of the chosen linear regression model
+Note that 6 of the 10 folds yields the same number of input variables (8): *alcohol*, *volatile.acidity*, *sulphates*, *chlorides*, *pH*, *total.sulfur.dioxide*, and *free.sulfur.dioxide*. The average RMSE is `r round(mean(cv.test.rmse[sapply(cv.fs.models, length) == 8]), 2)` +/- `r round(sd(cv.test.rmse[sapply(cv.fs.models, length) == 8]), 2)` (excluding the folds that did not result in the same predictors). 
+
+Finally, the final model is calculated from all data in the training set, using the input variables obtained in the validation stage.
+```{r}
+predictors <- names(cv.fs.models[[10]])[-1]              # one of the models in cv.fs.models which converged  
+formula <- as.formula(paste("quality ~ ", paste(predictors, collapse="+")))
+linear.model <- lm(formula, data=train.set)             # the final model
+summary(linear.model)                                   # summary of the final model
+```
+
+### Performance on the test set
+The following block of codes evaluate the RMSE, prediction accuracy, and mean absolute difference (MAD) of the linear model applied on the test set:
+```{r}
+predictions <- predict(linear.model, newdata=test.set, interval="prediction")
+predictions <- floor(predictions + 0.5)        # round to nearest integer
+
+# RMSE
+linear.model.rmse <- sqrt(sum((predictions[,"fit"] - test.set$quality)^2)/nrow(test))
+linear.model.rmse
+
+# Classification accuracy
+lm.conf.matrix <- confusionMatrix(factor(predictions[,"fit"], levels=c(3:8)), factor(test.set$quality))
+lm.conf.matrix$table                   # The confusion matrix
+lm.conf.matrix$overall["Accuracy"]     # Accuracy of prediction
+
+# MAD (Mean absolute difference)
+linear.model.mad <- sum(abs(predictions[,"fit"] - test.set$quality))/nrow(test)
+linear.model.mad
+```
+
+## 4.2. K-Nearest Neighbors
+
+### Selection of model parameters and input variables
+The Principal Component Analysis (PCA) was applied to the dataset, and the transformed data was used as input to the KNN model. Ten-fold cross validation was used to select the dimension of the principal components and the number of nearest neighbors to be used in the final model. 
+
+The following block of codes executes the model and input selection logic:
+```{r}
+# Apply PCA transformation
+train.pca <- prcomp(train.set[ , names(train.set) != "quality"])  
+
+# 10 fold cross validation to choose the # of nearest neighbors 
+# and the dimension of input variables
+max.neighbors <- 10
+max.pcr <- dim(train.pca$x)[2]
+cv.pct.acc <- matrix(0, nrow=max.neighbors, ncol=max.pcr)
+for (k in 1:max.neighbors) {
+  for (npc in 1:max.pcr) {
+    train.prcomp <- cbind(as.data.frame(train.pca$x[ ,1:npc]), 
+                          "quality" = train.set$quality)
+    knn <- IBk(factor(quality) ~ ., 
+               data=train.prcomp, control = Weka_control(K = k))
+    perf.knn <- evaluate_Weka_classifier(knn, numFolds=10, seed=set.seed(642))
+    cv.pct.acc[k, npc] <- perf.knn$details["pctCorrect"]    
+  } 
+}
+
+k_opt <- which(cv.pct.acc == max(cv.pct.acc), arr.ind=TRUE)[1]
+p_opt <- which(cv.pct.acc == max(cv.pct.acc), arr.ind=TRUE)[2]
+```
+
+Let us plot the accuracy of classification, averaged across folds. The optimum $(k, p)$, number of nearest neighbors and principal components, respectively, are the pair that yields the largest prediction accuracy. These are $k^*$ = `r round(k_opt,2)` and $p^*$ = `r round(p_opt, 2)`.
+
+```{r, warning=FALSE}
+cv.pct.acc <- as.data.frame(cv.pct.acc, 
+                            row.names = c(1:max.neighbors), 
+                            col.names=c(1:max.pcr))
+cv.pct.acc$k <- c(1:max.neighbors)
+cv.pct.acc <- melt(cv.pct.acc, id=c("k"))
+ggplot(data=cv.pct.acc, aes(x=k, y=value, color=factor(as.integer(variable)))) +
+  geom_line() +
+  labs(title = "Classification accuracy across k and p",
+       x = "Number of nearest neighbors, k",
+       y = "Classification accuracy",
+       color="Number of principal components")
+```
+
+Note a clear separation of performance for $p < 5$ and $p>=5$; this suggests that we need to use more than 5 principal components in the final model. 
+
+### Summary of the chosen KNN model
+The optimum $(k^*, p^*)$ obtained using the 10-fold cross validation procedure were $k^*$ = `r round(k_opt,2)` and $p^*$ = `r round(p_opt, 2)`. With these parameter values, the final KNN model was built using all of the training data.
+
+```{r}
+train.prcomp <- cbind(as.data.frame(train.pca$x[ , 1:p_opt]), 
+                          "quality" = train.set$quality)
+knn.final <- IBk(factor(quality) ~ ., data=train.prcomp,
+                 control = Weka_control(K = k_opt))
+```
+
+### Performance on the test set
+The following block of codes calculates the classification accuracy and the RMSE of the prediction on the test set. The confusion matrix, accuracy of prediction, and RMSE of the prediction are evaluated.
+```{r}
+# PCA transformation of the test dataset
+pcr.test <-  scale(test.set[ , names(test.set)!= "quality"], 
+                   center = train.pca$center,
+                   scale = train.pca$scale) %*% train.pca$rotation[ , 1:p_opt]
+pcr.test <- cbind(as.data.frame(pcr.test), "quality" = as.factor(test.set$quality))
+
+# Use knn.final to predict test data
+predictions <- predict(knn.final, newdata = pcr.test)
+knn.conf.matrix <- confusionMatrix(predictions,test.set$quality)
+
+# Compute performance measures: classification accuracy and RMSE
+# Classification accuracy
+knn.conf.matrix$table                   # The confusion matrix
+knn.conf.matrix$overall["Accuracy"]     # Accuracy of prediction
+
+# RMSE - force labels into integer
+knn.rmse <- sqrt(sum((as.integer(predictions)-as.integer(test.set$quality))^2)/nrow(test.set))  # RMSE
+knn.rmse
+
+# MAD
+knn.mad <- sum(abs(as.integer(predictions)-as.integer(test.set$quality)))/nrow(test.set) # RMSE
+knn.mad
+```
+
+***

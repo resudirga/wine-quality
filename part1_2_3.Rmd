@@ -1,0 +1,81 @@
+# Part 1: Import data
+Import the data
+```{r}
+wine.df <- read.csv("winequality-red.csv", header=TRUE,
+                    sep=";") 
+```
+
+***
+
+# Part 2: Explore the data
+
+Check for data characteristics, missing data, and correlation among attributes.
+```{r, fig.width=8, fig.height=8}
+# head(wine.df, 5)                    # display the first 5 rows 
+sapply(wine.df, class)              # data type of each column in df
+any(!complete.cases(wine.df))       # any incomplete rows?
+
+par(oma=c(10,0,0,0))
+pairs.panels(wine.df, ellipses=F)   # Visualize correlation among attributes
+```
+
+In total, there are 11 wine attributes and a quality score associated with each wine. All variables are of continuous, numeric types (quantitative variables), except the quality score which assumes integer values. There is no missing observation. 
+
+The correlation plot suggests strong correlation among some of the attributes. For example, the absolute (Pearson) correlation of the pairs (*citric acid*, *fixed acidity*), (*free sulfur dioxide*, *total sulfur dioxide*), (*fixed acidity*, *pH*) are greater than 0.67.  
+
+Let us also apply PCA and visualize the transformed data on their first 2 principal components.
+```{r}
+pca.wine <- prcomp(wine.df[ , names(wine.df) != "quality"])   
+summary(pca.wine) 
+
+# Plot the data with quality labels along their 2 major principal components
+pc2.wine.df <- data.frame(PC1 = pca.wine$x[ ,"PC1"],
+                          PC2 = pca.wine$x[ ,"PC2"],
+                          quality = wine.df[ ,"quality"])
+
+ggplot(pc2.wine.df, aes(x=PC1, y=PC2, color = factor(quality))) + 
+  geom_point() +  
+  scale_colour_manual(values=c("red", "magenta", "orange", 
+                               "green", "blue", "black")) + 
+  labs(title = "Projection of red wine data on its 2 major principal components",
+         x="PC1",
+         y="PC2") 
+```
+
+Principal component analysis suggests that more than 99% of variance in the data is accounted for by the first 2 principal components. The plot of the data projected on the first 2 principal components did not show any well separated clusters.
+
+***
+
+# Part 3: Proposed models
+
+This problem can be defined as either a regression or classification problem. The target variable (*quality*) takes discrete, integer values between 0-10 (0 = very bad, 10 = excellent) (https://archive.ics.uci.edu/ml/datasets/Wine+Quality). The available dataset, however, includes only red wines with quality scores between 3 and 8. 
+
+Defining the problem as a regression task allows for predicting the quality score as a continuous value in the range of 0-10, which can then be rounded to the closest integer. Regression techniques also take into account the order of the scores (e.g., 4 is closer to 3 than to 7) in deriving the model. On the other hand, defining the problem as a classification task predicts only scores that exist in the dataset, i.e., $\{3, 4, \cdots, 8\}$. Classification techniques also treat the classes as unordered (e.g.,the difference between 3 and 7 is equal to the difference between 3 and 4).   
+
+As an exercise, I will build both regression and classification models. The linear regression and  KNN techniques are employed, and the results of their predictions will be compared. 
+
+Formally, the regression/classification problem is defined as follows:
+
+**Task**: Given 11 attributes of a red wine, predict its quality score (0-10 if defining this as a regression task; 3-8 if defining this as a classification task)
+
+**Experience**: A dataset of 1599 Portuguese "Vinho Verde" red wines with their 11 attributes and quality scores.
+
+**Performance**: 
+
+1. **For linear regression**: *RMSE*, the square root of the sum of the differences between the predicted and true quality scores. The predicted score takes any continuous values between 0-10. 
+
+2. **For KNN**: Accuracy of classification, the percentage of correctly predicted quality scores.
+
+For comparing the performance of the linear regression vs. KNN models, the following metrics will be used:
+
+1. *RMSE*, the root mean squared of the differences between the true and predicted quality scores (integer values).
+
+2. *Classification accuracy*, the percentage of correctly predicted quality scores
+
+3. *Mean absolute difference* (MAD). This metric was used by [Cortez, et al.] (http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.pdf) for evaluating their prediction models on the same red wine dataset. Here is the citation:
+
+P. Cortez, A. Cerdeira, F. Almeida, T. Matos and J. Reis. 
+
+Modeling wine preferences by data mining from physicochemical properties. In Decision Support Systems, Elsevier, 47(4):547-553, 2009.
+
+***

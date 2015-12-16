@@ -1,0 +1,20 @@
+```{r, warning=FALSE}
+rm(list=ls(all=TRUE)) 
+library(psych)           
+library(ggplot2)
+library(caret)           # experiment design (cross validation)
+library(MASS)            # stepwise linear regression
+library(RWeka)           # Weka
+library(kknn)            # RWeka's knn
+library(reshape2)
+```
+
+```{r child = 'part1_2_3.Rmd'}
+```
+
+```{r child = 'part_4.Rmd'}
+# 
+```
+
+```{r child = 'part5_6.Rmd'}
+```
